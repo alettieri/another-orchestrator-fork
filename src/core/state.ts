@@ -210,7 +210,9 @@ export function createStateManager(stateDir: string): StateManager {
 
       const tickets = await this.listTickets(planId);
       const allComplete =
-        tickets.length > 0 && tickets.every((t) => t.status === "complete");
+        plan.tickets.length > 0 &&
+        tickets.length === plan.tickets.length &&
+        tickets.every((t) => t.status === "complete");
       if (allComplete) {
         await this.savePlan({ ...plan, status: "complete" });
       }

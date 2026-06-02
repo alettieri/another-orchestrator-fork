@@ -291,6 +291,18 @@ describe("StateManager", () => {
       expect(plan?.status).toBe("active");
     });
 
+    it("does not mark complete when some defined tickets are not yet on disk", async () => {
+      const sm = createStateManager(stateDir);
+      // plan defines t-1 and t-2, but only t-1 has been saved to disk
+      await sm.savePlan(makePlan());
+      await sm.saveTicket(makeTicket({ ticketId: "t-1", status: "complete" }));
+
+      await sm.maybeMarkPlanComplete("plan-1");
+
+      const plan = await sm.getPlan("plan-1");
+      expect(plan?.status).toBe("active");
+    });
+
     it("throws for nonexistent plan", async () => {
       const sm = createStateManager(stateDir);
       await expect(sm.maybeMarkPlanComplete("nope")).rejects.toThrow(
