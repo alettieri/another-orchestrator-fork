@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Idempotent worktree removal script.
+# Removes a git worktree and optionally deletes the local branch.
+# Safe to run more than once — if the folder is already gone, it still
+# tries to delete the branch using the current directory as the repo root.
 #
 # Args:
-#   $1 = worktree_path (required)
-#   $2 = branch_name   (optional) — when provided, the local branch is also
-#                                   deleted after the worktree is removed.
+#   $1 = worktree_path (required) — path to the worktree folder to remove
+#   $2 = branch_name   (optional) — if given, also deletes this local branch
 
 if [[ -z "${1:-}" ]]; then
   echo "Usage: cleanup-worktree.sh <worktree_path> [branch_name]" >&2
@@ -16,25 +17,29 @@ fi
 WORKTREE_PATH="$1"
 BRANCH_NAME="${2:-}"
 
-if [[ ! -d "$WORKTREE_PATH" ]]; then
-  echo "Worktree already removed: $WORKTREE_PATH"
-  if [[ -n "$BRANCH_NAME" ]]; then
-    echo "Branch cleanup skipped for $BRANCH_NAME because the repository could not be resolved from the missing worktree."
+REPO_ROOT=""
+
+if [[ -d "$WORKTREE_PATH" ]]; then
+  echo "Cleaning worktree ${WORKTREE_PATH}"
+  REPO_ROOT="$(git -C "$WORKTREE_PATH" rev-parse --git-common-dir)"
+  REPO_ROOT="$(cd "$(dirname "$REPO_ROOT")" && pwd)"
+  git -C "$REPO_ROOT" worktree remove "$WORKTREE_PATH" --force
+  git -C "$REPO_ROOT" worktree prune
+  echo "Worktree removed: $WORKTREE_PATH"
+else
+  echo "Worktree directory already removed: $WORKTREE_PATH"
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [[ -n "$REPO_ROOT" ]]; then
+    git -C "$REPO_ROOT" worktree prune
   fi
+fi
+
+if [[ -z "$BRANCH_NAME" ]]; then
   exit 0
 fi
 
-echo "Cleaning worktree ${WORKTREE_PATH}"
-
-REPO_ROOT="$(git -C "$WORKTREE_PATH" rev-parse --git-common-dir)"
-REPO_ROOT="$(cd "$(dirname "$REPO_ROOT")" && pwd)"
-
-git -C "$REPO_ROOT" worktree remove "$WORKTREE_PATH" --force
-git -C "$REPO_ROOT" worktree prune
-
-echo "Worktree removed: $WORKTREE_PATH"
-
-if [[ -z "$BRANCH_NAME" ]]; then
+if [[ -z "$REPO_ROOT" ]]; then
+  echo "Branch cleanup skipped for $BRANCH_NAME because the repository could not be resolved."
   exit 0
 fi
 
